@@ -21,8 +21,11 @@
 - ~~Build Github repo~~
 - Connect Claude
 - Connect Obsidean 
-- Connect Dagster
-- Connext Cloudflare
+- ~~Connect Dagster~~
+- ~~Connext Cloudflare~~
 - Connect Github Action
-- Connect Vercel1
+- ~~Connect Vercel~~
 - Build Arcictecture and DevOps Pipeline
+
+## Installed Packages
+- pip install boto3 python-dotenv pandas pyarrow duckdb
