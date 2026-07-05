@@ -18,11 +18,11 @@
 
 ## To Do
 
-- Build Github repo
+- ~~Build Github repo~~
 - Connect Claude
 - Connect Obsidean 
 - Connect Dagster
 - Connext Cloudflare
 - Connect Github Action
-- Connect Vercel
+- Connect Vercel1
 - Build Arcictecture and DevOps Pipeline
