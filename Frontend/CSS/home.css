@@ -1,0 +1,202 @@
+/* ============ Home page — all styles live here ============ */
+
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #4ade80;
+  --accent-dim: rgba(74, 222, 128, 0.12);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Header / footer ---------- */
+
+.site-header {
+  text-align: center;
+  padding: 2.5rem 1rem 1.5rem;
+}
+
+.site-header h1 {
+  font-size: 2rem;
+  background: linear-gradient(90deg, var(--accent), #38bdf8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.tagline {
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+
+.site-footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 1.5rem;
+  margin-top: auto;
+}
+
+/* ---------- Layout ---------- */
+
+.calculator {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 1.5rem;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+@media (max-width: 800px) {
+  .calculator {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.75rem;
+}
+
+/* ---------- Inputs ---------- */
+
+.field {
+  display: block;
+  margin-bottom: 1.5rem;
+}
+
+.field span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.4rem;
+}
+
+.field input[type="number"] {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  font-size: 1.1rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.field input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.field input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.field output {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.inputs-panel h2 {
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+
+/* ---------- Investment option cards ---------- */
+
+.options-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.option-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.9rem 1.1rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.2s, transform 0.15s, background 0.2s;
+}
+
+.option-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.option-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.option-rate {
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.option-desc {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+/* ---------- Results ---------- */
+
+.result-summary {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.final-amount {
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.gain {
+  color: var(--text);
+  margin-top: 0.25rem;
+}
+
+.detail {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+#growth-chart {
+  width: 100%;
+  height: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
