@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quant Finance | Investment Calculator</title>
+  <link rel="stylesheet" href="CSS/home.css" />
+  <script type="module" src="JS/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <h1>Investment Growth Calculator</h1>
+    <p class="tagline">Project your money over time using historical average returns</p>
+  </header>
+
+  <main class="calculator">
+    <section class="panel inputs-panel">
+      <label class="field">
+        <span>Your liquidity ($)</span>
+        <input id="liquidity-input" type="number" min="0" value="10000" />
+      </label>
+
+      <label class="field">
+        <span>Years invested</span>
+        <input id="years-input" type="range" min="1" max="40" value="10" />
+        <output id="years-output">10 years</output>
+      </label>
+
+      <h2>Choose an investment</h2>
+      <div id="investment-options" class="options-grid"></div>
+    </section>
+
+    <section class="panel results-panel">
+      <div id="result-summary" class="result-summary"></div>
+      <canvas id="growth-chart" width="600" height="320"></canvas>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Returns are static placeholders — live data pipeline coming soon.</p>
+  </footer>
+</body>
+</html>
