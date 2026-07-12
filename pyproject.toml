@@ -1,2 +1,24 @@
+[project]
+name = "quant-finance-mldl-analytics"
+version = "0.1.0"
+dependencies = [
+    "dagster",
+    "dagster-webserver",
+    "dagster-dbt",
+    "dagster-duckdb",
+    "dagster-duckdb-pandas",
+    "pandas",
+    "yfinance",
+    "pyarrow",
+    "boto3",
+    "python-dotenv",
+    "duckdb",
+    "dbt-core",
+    "dbt-duckdb"
+]
+
 [tool.dagster]
 module_name = "data_pipeline"
+
+[tool.setuptools.packages.find]
+include = ["data_pipeline*"]

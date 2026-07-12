@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: market
+    schema: main
+    tables:
+      - name: yahoo_raw
+        description: Raw OHLCV bars landed by the raw_market_prices Dagster asset.

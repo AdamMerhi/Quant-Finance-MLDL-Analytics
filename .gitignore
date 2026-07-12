@@ -7,3 +7,10 @@ __pycache__/
 .vercel
 .env*
 node_modules/
+CLAUDE.md
+*.duckdb
+*.duckdb.wal
+data_pipeline/dbt_project/target/
+data_pipeline/dbt_project/logs/
+*.parquet
+*.egg-info/

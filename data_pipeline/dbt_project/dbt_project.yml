@@ -1,0 +1,13 @@
+name: 'market_data'
+version: '1.0.0'
+config-version: 2
+
+profile: 'market_data'
+
+model-paths: ["models"]
+
+models:
+  market_data:
+    us-exchange:
+      staging:
+        +materialized: view
