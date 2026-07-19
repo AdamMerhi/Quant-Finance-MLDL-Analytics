@@ -14,8 +14,9 @@ data_pipeline/dbt_project/target/
 data_pipeline/dbt_project/logs/
 *.parquet
 *.egg-info/
-tdo
 docs/
 .claude
 quant_finance_mldl_analytics.egg-info
 Frontend\.vercel\README.txt
+.github/workflows
+tdo.md
