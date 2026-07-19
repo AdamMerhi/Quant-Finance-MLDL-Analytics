@@ -5,7 +5,7 @@ WITH prices AS (
 
 SELECT
 
-    date,
+    try_cast(date AS DATE) AS date,
     ticker,
     close,
     volume
