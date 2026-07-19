@@ -1,0 +1,26 @@
+%% System Architecture — Quant Finance MLDL Analytics
+%% Solid nodes/edges = live today. Dashed nodes/edges = planned, not yet built.
+flowchart LR
+    yahoo["Yahoo Finance\n(external, via yfinance)"]
+
+    subgraph dagster["Dagster pipeline (data_pipeline/)"]
+        direction LR
+        extract["raw_market_prices\n(extract.py)"]
+        stg["stg_market_prices\n(dbt view)"]
+        load["market_prices_parquet\n(load.py)"]
+        extract --> stg --> load
+    end
+
+    r2[("Cloudflare R2\nus_exchange/stg_market_prices.parquet")]
+    gha["GitHub Actions\n(trigger)"]
+    backend["FastAPI backend\n(planned)"]
+    frontend["Vercel frontend\n(planned)"]
+
+    yahoo --> extract
+    load --> r2
+    gha -. triggers .-> dagster
+    r2 -.-> backend
+    backend -.-> frontend
+
+    style backend stroke-dasharray: 5 5
+    style frontend stroke-dasharray: 5 5

@@ -1,0 +1,34 @@
+%% Infrastructure — hosting, compute, storage, networking
+%% Solid = live today. Dashed = planned, not yet built.
+flowchart TB
+    subgraph external["External services"]
+        yahoo["Yahoo Finance API"]
+    end
+
+    subgraph ci["CI / Compute (GitHub Actions runner)"]
+        runner["Ubuntu runner"]
+        dagster["Dagster job\n(market_data_job)"]
+        duckdb[("DuckDB\n(ephemeral, in-run only)")]
+        runner --> dagster --> duckdb
+    end
+
+    subgraph storage["Storage (durable)"]
+        r2[("Cloudflare R2 bucket\nS3-compatible")]
+    end
+
+    subgraph hosting["Hosting"]
+        vercel["Vercel\nstatic site: quant-fintech-frontend"]
+        backend_host["Backend host\n(planned)"]
+    end
+
+    subgraph local["Local dev"]
+        venv[".venv + dagster dev\n(localhost:3000)"]
+    end
+
+    yahoo --> dagster
+    duckdb -- "Parquet upload (boto3)" --> r2
+    r2 -.-> backend_host
+    backend_host -.-> vercel
+    venv -. "manual runs" .-> duckdb
+
+    style backend_host stroke-dasharray: 5 5

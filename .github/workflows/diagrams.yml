@@ -1,0 +1,39 @@
+name: Render Diagrams
+
+# Only source-file changes can trigger this workflow. The bot's own commit
+# below only ever touches .svg files, so it can never re-trigger this run —
+# that plus the `[skip ci]` guard below are two independent loop-prevention
+# mechanisms.
+on:
+  push:
+    branches: [main]
+    paths: ["docs/diagrams/**/*.mmd"]
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Render Mermaid diagrams to SVG
+        run: bash scripts/generate-diagrams.sh
+
+      - name: Commit rendered SVGs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/diagrams/**/*.svg
+          if git diff --cached --quiet; then
+            echo "No diagram changes to commit."
+          else
+            git commit -m "docs: render diagrams [skip ci]"
+            git push
+          fi

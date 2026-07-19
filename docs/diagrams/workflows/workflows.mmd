@@ -1,0 +1,20 @@
+%% Major workflow — a single pipeline run (market_data_job)
+sequenceDiagram
+    actor Trigger as CI schedule / manual "Materialize all"
+    participant Dagster
+    participant Yahoo as Yahoo Finance
+    participant DuckDB
+    participant dbt
+    participant R2 as Cloudflare R2
+
+    Trigger->>Dagster: run market_data_job
+    Dagster->>Yahoo: yf.download(IVV, VOO, ^IXIC)
+    Yahoo-->>Dagster: OHLCV bars
+    Dagster->>DuckDB: CREATE OR REPLACE TABLE yahoo_raw
+    Dagster->>dbt: dbt build
+    dbt->>DuckDB: CREATE VIEW stg_market_prices\nAS SELECT date, ticker, close, volume\nFROM source(yahoo_raw)
+    Dagster->>DuckDB: SELECT * FROM stg_market_prices
+    DuckDB-->>Dagster: Arrow table
+    Dagster->>Dagster: write Parquet (in-memory buffer)
+    Dagster->>R2: put_object(us_exchange/stg_market_prices.parquet)
+    R2-->>Dagster: 200 OK

@@ -1,0 +1,22 @@
+%% Database — DuckDB tables in the pipeline run
+%% STG_MARKET_PRICES is a dbt *view* derived from YAHOO_RAW, not a foreign-key relationship.
+erDiagram
+    YAHOO_RAW {
+        date date
+        string ticker
+        float open
+        float high
+        float low
+        float close
+        float adj_close
+        int volume
+    }
+
+    STG_MARKET_PRICES {
+        date date
+        string ticker
+        float close
+        int volume
+    }
+
+    YAHOO_RAW ||--o{ STG_MARKET_PRICES : "derived (dbt view, select subset of columns)"
