@@ -1,24 +1,24 @@
-%% API Architecture — Backend/ (Node + Fastify)
+%% API Architecture — Frontend/api/ (Vercel Functions, same project as the static site)
 %% First endpoint: real historical investment projections read from R2.
 flowchart LR
     subgraph client["Frontend (Frontend/JS/Investment.js)"]
-        marketFund["MarketFund.projectSeries()\n(Voo, Sp500, Nasdaq)"]
+        marketFund["MarketFund.projectSeries()\n(Voo, Sp500, Nasdaq)\nfetch('/api/...') — same origin"]
     end
 
-    subgraph api["Backend API (Backend/src/api-management/)"]
-        health["GET /health"]
+    subgraph api["Frontend/api/ (Vercel Functions)"]
+        health["GET /api/health"]
         projection["GET /api/investment/projection\n?fund=&liquidity=&years="]
         controller["InvestmentController\nvalidate -> resolve ticker -> project"]
         projection --> controller
     end
 
-    subgraph data["Backend/src/data-access/"]
-        repo["MarketDataRepository\ncached month-end closes"]
+    subgraph data["Frontend/api/_lib/data-access/"]
+        repo["MarketDataRepository\ncached month-end closes\n(reused across warm invocations)"]
         r2client["R2Client\n(@aws-sdk/client-s3)"]
         repo --> r2client
     end
 
-    subgraph calc["Backend/src/investment-calculations/"]
+    subgraph calc["Frontend/api/_lib/investment-calculations/"]
         funds["funds.createFund(fundKey)"]
         investment["Investment.project()\n(polymorphic)"]
         funds --> investment

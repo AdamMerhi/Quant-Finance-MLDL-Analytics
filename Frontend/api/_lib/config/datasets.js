@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = path.resolve(__dirname, "../../../datasets.config.json");
+// Frontend/api/_lib/config -> repo root is 4 levels up (config/_lib/api/Frontend).
+const CONFIG_PATH = path.resolve(__dirname, "../../../../datasets.config.json");
 
 const raw = readFileSync(CONFIG_PATH, "utf-8");
 const config = JSON.parse(raw);

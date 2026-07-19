@@ -14,18 +14,19 @@ flowchart LR
     r2[("Cloudflare R2\nus_exchange/stg_market_prices.parquet")]
     gha["GitHub Actions\n(trigger)"]
 
-    subgraph backend["Backend API (Backend/, Node + Fastify)"]
+    subgraph vercel["Vercel project: quant-fintech-frontend"]
         direction LR
-        repo["MarketDataRepository\n(hyparquet, cached)"]
-        controller["InvestmentController\nGET /api/investment/projection"]
-        calc["Investment / MarketInvestment\n(Voo, Sp500, Nasdaq)"]
-        repo --> controller --> calc
+        subgraph functions["api/ (Vercel Functions)"]
+            repo["MarketDataRepository\n(hyparquet, cached)"]
+            controller["InvestmentController\nGET /api/investment/projection"]
+            calc["Investment / MarketInvestment\n(Voo, Sp500, Nasdaq)"]
+            repo --> controller --> calc
+        end
+        staticSite["Static site (index.html, JS/)"]
+        calc -- "same-origin fetch,\nno CORS needed" --> staticSite
     end
-
-    frontend["Vercel frontend\n(Voo/Sp500/Nasdaq: live fetch\nSuper/Savings: local calc)"]
 
     yahoo --> extract
     load --> r2
     gha -. triggers .-> dagster
     r2 --> repo
-    calc --> frontend

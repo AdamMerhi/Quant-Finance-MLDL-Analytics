@@ -6,6 +6,8 @@
 
 **Status at end of sprint:** `Backend/` is no longer empty. A Node + Fastify API reads `stg_market_prices.parquet` from R2, computes real month-by-month compounded projections for three funds, and the Frontend calculator fetches from it live. Super/Savings Account remain local placeholders (unchanged). No CI/deployment for the backend yet — local only (see [Follow-ups](#follow-ups--known-gaps)).
 
+**Update, later the same sprint:** the standalone `Backend/` Fastify server described below was migrated to Vercel Functions inside the Frontend's own Vercel project. `Backend/` no longer exists. See the [addendum](#addendum-migrated-to-vercel-functions-same-project-as-the-frontend) at the end of this page — the sections below are kept as-written for historical accuracy about what was originally built and why.
+
 ---
 
 ## 1. Starting point
@@ -153,3 +155,30 @@ data_pipeline/assets/us_exchange/
 - **Only ~79 months of history exist in R2 today** — the pipeline needs to re-run with the new rolling 20-year `extract.py` window (§2.1) before the full 40-year slider range is meaningfully populated.
 - **Super/Savings Account are still synthetic placeholders** — real superannuation/savings-rate data sourcing is unscoped future work.
 - **`ml-dl/` is an empty placeholder** — no ML/DL work has started.
+
+---
+
+## Addendum: migrated to Vercel Functions, same project as the Frontend
+
+Shortly after the above was written, the first follow-up ("Backend is local-only") was resolved — but not by deploying the standalone `Backend/` Fastify server. Instead, the backend was **migrated into the Frontend's own Vercel project**, since a real deployed backend was needed and Vercel serverless functions turned out to be a clean fit once the stack change to a pure-JS Parquet reader (§2.6) removed the native-dependency concern that originally argued against serverless.
+
+**What changed:**
+- `Backend/` (the standalone Fastify app, `server.js`, `routes.js`, and all of `src/`) was **deleted**.
+- The framework-agnostic logic — `config/datasets.js`, `data-access/` (`R2Client.js`, `MarketDataRepository.js`), `investment-calculations/` (`Investment.js`, `MarketInvestment.js`, `funds.js`), and `api-management/InvestmentController.js` — moved as-is into `Frontend/api/_lib/`. Only one file changed: `config/datasets.js`'s path back to the repo-root `datasets.config.json` (one extra `../`, since the new location is one directory deeper).
+- Two new thin Vercel Function handlers replaced Fastify's `routes.js`: `Frontend/api/health.js` and `Frontend/api/investment/projection.js` — same `(req, query) → InvestmentController.getProjection()` logic, adapted to Vercel's `(req, res)` signature instead of Fastify's route/reply API. `InvestmentController`, `funds.createFund()`, and every `Investment` subclass are untouched — the migration only touched the HTTP-framework seam, not the business logic.
+- `Frontend/api/_lib/` uses a leading underscore deliberately: Vercel's file-based router treats `_`-prefixed files/folders under `api/` as non-routable, so only `health.js` and `investment/projection.js` become actual endpoints.
+- `Frontend/vercel.json` added `functions.includeFiles: "../datasets.config.json"` — without it, Vercel's function bundler (which traces `import`/`require`, not arbitrary `fs.readFileSync` paths) wouldn't have packaged the repo-root config file into the deployed function, causing an `ENOENT` in production despite working locally.
+- `Frontend/package.json` gained `"type": "module"`, `hyparquet`, and `@aws-sdk/client-s3` as dependencies; `fastify`, `@fastify/cors`, and `dotenv` are no longer needed anywhere.
+- `Frontend/JS/Investment.js`'s `MarketFund.projectSeries()` now calls a **relative** path (`/api/investment/projection?...`) instead of an absolute `http://localhost:8080` URL — same-origin in both `vercel dev` and production, so **no CORS configuration exists or is needed** at all (a full reversal of the earlier plan to maintain a CORS allowlist).
+
+**Why this was chosen over deploying `Backend/` as its own service** (e.g. Render/Railway): one Vercel project to deploy, one domain, zero CORS surface to maintain, and the pure-JS `hyparquet` approach (§2.6) meant there was no native-binary blocker to serverless anymore. The tradeoff — noted when this was first discussed — is that Vercel Functions cold-start and don't guarantee `MarketDataRepository`'s in-memory cache stays warm between invocations the way an always-on process would; acceptable for a low-traffic personal project.
+
+**Verified:**
+- `vercel dev` (local) served the static site and both API routes together on one port; `curl` against `/api/health` and `/api/investment/projection?fund=sp500&...` returned identical results to the old Fastify endpoint (same `finalValue`/`gain`/`totalReturnPct` for the same inputs), confirming the `includeFiles` config correctly bundles `datasets.config.json`.
+- Full browser test against `vercel dev`: VOO loaded on page load with zero console errors and zero CORS errors (same-origin), matching the earlier Fastify-backed test.
+
+**New follow-ups introduced by this migration:**
+- **Production Environment Variables are not yet set.** `vercel env ls` on `quant-fintech-frontend` currently returns none. The five `R2_*`/`CLOUDFLARE_ACCOUNT_ID` variables must be added via `vercel env add <NAME> production` (interactive — enter secrets yourself, not via an agent) or the Vercel dashboard before a production deploy will actually work.
+- **Not yet deployed to production** (`vercel --prod`) — verified via `vercel dev` locally only. A preview or production deploy is a separate, explicit step.
+- **`Frontend/.env.local`** (gitignored) now exists locally with a copy of the R2 credentials, for `vercel dev` to pick up — a fresh clone needs this recreated manually (copy from the repo-root `.env`).
+- The former follow-up "CORS allowlist... needs the production Vercel domain added" is now **obsolete** — there is no CORS allowlist at all, since everything is same-origin.

@@ -2,8 +2,8 @@
 // Subclasses override rateForYear() — that is the polymorphism:
 // the calculator only ever talks to "an Investment", never a specific type.
 
-// Where the backend API lives. Only MarketFund subclasses call this.
-const API_BASE = "http://localhost:8080";
+// The backend API is served from this same Vercel project under /api
+// (see Frontend/api/), so calls are same-origin — no base URL or CORS needed.
 
 export class Investment {
   constructor(name, description) {
@@ -76,7 +76,7 @@ export class MarketFund extends Investment {
   }
 
   async projectSeries(principal, years) {
-    const url = `${API_BASE}/api/investment/projection?fund=${this.fundKey}&liquidity=${principal}&years=${years}`;
+    const url = `/api/investment/projection?fund=${this.fundKey}&liquidity=${principal}&years=${years}`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Projection request failed for ${this.name} (${response.status})`);

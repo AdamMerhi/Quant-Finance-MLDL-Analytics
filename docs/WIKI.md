@@ -24,7 +24,7 @@ The Backend API (Node + Fastify) and the R2 → API → Frontend data flow are n
 
 - **Compute:** GitHub Actions runner executes the Dagster job (`market_data_job`); DuckDB is used only as an in-run compute engine and does not persist across runs.
 - **Storage:** Cloudflare R2 is the durable system of record — the pipeline writes Parquet there on every run.
-- **Hosting:** Vercel hosts the static Frontend (project `quant-fintech-frontend`). The Backend API (`Backend/`, Node + Fastify) runs locally only — a deployed backend host is still planned.
+- **Hosting:** Vercel hosts everything — the static Frontend **and** the Backend API, as Vercel Functions (`Frontend/api/*.js`) in the same `quant-fintech-frontend` project. Same origin, so no CORS is needed. (This superseded an earlier standalone `Backend/` Node+Fastify server — see [Sprint 2 addendum](sprint-2-backend-outcomes.md#addendum-migrated-to-vercel-functions-same-project-as-the-frontend).)
 - **Local dev:** `.venv` + `dagster dev` for manual runs against the same DuckDB/dbt project.
 
 ---
@@ -48,8 +48,8 @@ Two tables exist inside the DuckDB file used during a pipeline run:
 [View Mermaid source](diagrams/classes/class-diagram.mmd)
 
 Two parallel `Investment` hierarchies, one per language, kept intentionally similar in shape:
-- **Frontend** (`Frontend/JS/Investment.js`): base `Investment` → `MarketFund` (fetches projections from the backend) → `Voo` / `Sp500` / `Nasdaq`; and → `Super` / `SavingsAccount` (local synthetic math, unchanged). `CalculatorApp` only ever calls `projectSeries()` polymorphically.
-- **Backend** (`Backend/src/investment-calculations/`): base `Investment` → `MarketInvestment` (computes monthly returns from injected month-end closes) → `Voo` / `Sp500` / `Nasdaq`. `InvestmentController` only ever calls `project()` polymorphically via `funds.createFund()`.
+- **Frontend** (`Frontend/JS/Investment.js`): base `Investment` → `MarketFund` (fetches projections from `/api/investment/projection`) → `Voo` / `Sp500` / `Nasdaq`; and → `Super` / `SavingsAccount` (local synthetic math, unchanged). `CalculatorApp` only ever calls `projectSeries()` polymorphically.
+- **Backend** (`Frontend/api/_lib/investment-calculations/`): base `Investment` → `MarketInvestment` (computes monthly returns from injected month-end closes) → `Voo` / `Sp500` / `Nasdaq`. `InvestmentController` only ever calls `project()` polymorphically via `funds.createFund()`.
 
 Full detail: [Sprint 2 Outcomes](sprint-2-backend-outcomes.md#24-investment-class-hierarchy--mirrors-the-frontends-oop-style).
 
@@ -61,15 +61,15 @@ Full detail: [Sprint 2 Outcomes](sprint-2-backend-outcomes.md#24-investment-clas
 
 [View Mermaid source](diagrams/api/api.mmd)
 
-The first backend endpoint, served by `Backend/` (Node + Fastify — see the [stack-change note](sprint-2-backend-outcomes.md#26-stack-change-fastapi-duckdb--node-fastify-hyparquet) for why this isn't FastAPI/DuckDB as originally planned):
+The first backend endpoints, served as **Vercel Functions** under `Frontend/api/` — same project and domain as the static site, so calls are same-origin and need no CORS (see the [stack-change note](sprint-2-backend-outcomes.md#26-stack-change-fastapi-duckdb--node-fastify-hyparquet) for why this isn't FastAPI/DuckDB as originally planned, and the [Sprint 2 addendum](sprint-2-backend-outcomes.md#addendum-migrated-to-vercel-functions-same-project-as-the-frontend) for why it isn't a standalone Node server either):
 
 ```
-GET /health
+GET /api/health
 GET /api/investment/projection?fund={voo|sp500|nasdaq}&liquidity={number}&years={1-40}
   -> { fund, ticker, liquidity, months, labels, balances, finalValue, gain, totalReturnPct }
 ```
 
-Request path: Frontend `MarketFund.projectSeries()` → Fastify route → `InvestmentController` (validates input) → `MarketDataRepository` (cached `hyparquet` read of the R2 Parquet) + `funds.createFund()` (polymorphic `Investment.project()`) → JSON response. Full detail: [Sprint 2 Outcomes](sprint-2-backend-outcomes.md#3-current-api-surface).
+Request path: Frontend `MarketFund.projectSeries()` → `fetch('/api/investment/projection?...')` → `InvestmentController` (validates input) → `MarketDataRepository` (cached `hyparquet` read of the R2 Parquet) + `funds.createFund()` (polymorphic `Investment.project()`) → JSON response. Full detail: [Sprint 2 Outcomes](sprint-2-backend-outcomes.md#3-current-api-surface).
 
 ---
 
@@ -147,27 +147,29 @@ bash scripts/generate-diagrams.sh
 
 Renders every `.mmd` file under `docs/diagrams/` to an `.svg` beside it. Requires Node.js (pulls `@mermaid-js/mermaid-cli` via `npx` on first run).
 
-### Run the Backend API locally
+### Run the Frontend + Backend API locally
 
 ```powershell
-cd Backend
+cd Frontend
 npm install
-npm start
-# or: npm run dev   (auto-restarts on file changes)
+vercel dev
 ```
 
-Reads `.env` from the repo root (same R2 credentials as the pipeline) and listens on `http://localhost:8080`. Requires the pipeline to have run at least once so `stg_market_prices.parquet` exists in R2. See [Sprint 2 Outcomes](sprint-2-backend-outcomes.md) for the full API surface.
+Serves the static site **and** the `api/` Vercel Functions together on one local port — matches production exactly (same-origin, no CORS). Needs a `Frontend/.env.local` with the same `R2_*` credentials as the repo-root `.env` (gitignored; Vercel's local dev convention reads `.env.local` from the project root, not the repo root). Requires the pipeline to have run at least once so `stg_market_prices.parquet` exists in R2. See [Sprint 2 Outcomes](sprint-2-backend-outcomes.md) for the full API surface.
 
 ---
 
 ## Deployment
 
-### Frontend → Vercel
+### Frontend + Backend API → Vercel
 
 ```powershell
 cd Frontend
-vercel
+vercel        # preview deploy
+vercel --prod # production deploy
 ```
+
+Both the static site and the `api/` Vercel Functions deploy together as one project (`quant-fintech-frontend`). Before the first production deploy, the R2 credentials must be added as **Environment Variables** in the Vercel project (`vercel env add R2_ACCESS_KEY_ID production`, etc., or via the dashboard) — they are not read from any `.env` file in production.
 
 ### Data pipeline → GitHub Actions
 
@@ -176,10 +178,6 @@ vercel
 ### Diagrams → GitHub Actions
 
 `.github/workflows/diagrams.yml` runs on every push to `main` that touches `docs/diagrams/**/*.mmd`, renders all Mermaid sources to SVG via `scripts/generate-diagrams.sh`, and commits the resulting `.svg` files back with `[skip ci]` (so the commit can't retrigger itself).
-
-### Backend API → not yet deployed
-
-`Backend/` runs locally only (`npm start`, port 8080). There is no hosting/CI for it yet — see the dashed "Deployed backend host (planned)" node in the [Infrastructure diagram](#infrastructure) and the [Sprint 2 follow-ups](sprint-2-backend-outcomes.md#follow-ups--known-gaps).
 
 ---
 
@@ -196,6 +194,10 @@ Stored in `.env` at the project root (gitignored). Required by the Dagster pipel
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
 
 Loaded automatically by `data_pipeline/definitions.py` via `python-dotenv`'s `load_dotenv()` when running locally. In CI, the same variable names would be injected directly as env vars from repo secrets — no `.env` file needed there.
+
+The same five variables are also needed by the Backend API (`Frontend/api/`), but read separately:
+- **Local (`vercel dev`):** from `Frontend/.env.local` (gitignored, Vercel's own convention — not the repo-root `.env`).
+- **Production:** must be added as Vercel **Environment Variables** on the `quant-fintech-frontend` project (dashboard, or `vercel env add <NAME> production`) — not yet done as of Sprint 2's addendum.
 
 ---
 
@@ -217,17 +219,18 @@ Loaded automatically by `data_pipeline/definitions.py` via `python-dotenv`'s `lo
 │       └── models/us-exchange/staging/
 │           ├── _sources.yml          # declares source market.yahoo_raw
 │           └── stg_market_prices.sql
-├── Backend/                           # Node + Fastify API (Sprint 2)
-│   ├── server.js                      # Boots Fastify, CORS, warms cache, listens :8080
-│   └── src/
-│       ├── config/datasets.js         # Reads datasets.config.json
-│       ├── data-access/               # R2Client.js, MarketDataRepository.js (hyparquet)
-│       ├── investment-calculations/   # Investment.js, MarketInvestment.js, funds.js
-│       ├── api-management/            # routes.js, InvestmentController.js
-│       └── ml-dl/                     # Empty placeholder — future ML/DL work
-├── Frontend/                          # Static site deployed to Vercel
+├── Frontend/                          # Static site + Backend API, one Vercel project
 │   ├── index.html                     # Calculator UI
 │   ├── JS/                            # Investment.js, Chart.js, app.js
+│   ├── api/                           # Vercel Functions (Sprint 2 backend, migrated here)
+│   │   ├── health.js                  # GET /api/health
+│   │   ├── investment/projection.js   # GET /api/investment/projection
+│   │   └── _lib/                      # Framework-agnostic logic (not routable — "_" prefix)
+│   │       ├── config/datasets.js         # Reads datasets.config.json
+│   │       ├── data-access/               # R2Client.js, MarketDataRepository.js (hyparquet)
+│   │       ├── investment-calculations/   # Investment.js, MarketInvestment.js, funds.js
+│   │       └── api-management/            # InvestmentController.js
+│   ├── vercel.json                    # includeFiles: bundles root datasets.config.json into functions
 │   └── .vercel/                       # Vercel project config (links to quant-fintech-frontend)
 ├── docs/                              # Documentation hub
 │   ├── WIKI.md                        # This file
@@ -257,8 +260,8 @@ Loaded automatically by `data_pipeline/definitions.py` via `python-dotenv`'s `lo
 | Orchestration | Dagster (+ dagster-dbt) | 3-asset DAG live: extract → dbt → load-to-R2 |
 | Transform | dbt (duckdb adapter) | 1 staging model (`stg_market_prices`) |
 | Storage | Cloudflare R2 | Live — pipeline writes Parquet to it each run |
-| Backend API | Node.js + Fastify + hyparquet | 1 endpoint live locally: `GET /api/investment/projection` (VOO/S&P 500/Nasdaq) |
-| Frontend | Static HTML → Vercel | Deployed; VOO/S&P 500/Nasdaq fetch live data, Super/Savings still placeholders |
+| Backend API | Vercel Functions (Node.js + hyparquet) | 1 endpoint: `GET /api/investment/projection` (VOO/S&P 500/Nasdaq), same Vercel project as the Frontend |
+| Frontend | Static HTML → Vercel | Deployed; VOO/S&P 500/Nasdaq fetch live data (same-origin, no CORS), Super/Savings still placeholders |
 | CI/CD trigger | GitHub Actions | Diagram-render workflow live; daily pipeline schedule committed, awaiting repo secrets |
 | Data format | Apache Parquet | Live — written and verified in R2 |
 | Docs | Mermaid diagrams + WIKI | This system |
@@ -285,19 +288,20 @@ Loaded automatically by `data_pipeline/definitions.py` via `python-dotenv`'s `lo
 Full writeup: [Sprint 1 — Data Engineering Outcomes](sprint-1-data-engineering-outcomes.md)
 
 ### Sprint 2 — Backend ✅
-- [x] Node + Fastify app in `Backend/` (deviated from originally planned FastAPI + DuckDB — see [Sprint 2 §2.6](sprint-2-backend-outcomes.md#26-stack-change-fastapi-duckdb--node-fastify-hyparquet))
+- [x] Backend API (deviated from originally planned FastAPI + DuckDB — see [Sprint 2 §2.6](sprint-2-backend-outcomes.md#26-stack-change-fastapi-duckdb--node-fastify-hyparquet))
 - [x] Backend reads Parquet from R2 (`hyparquet`, no DuckDB/SQL)
 - [x] JSON API endpoint: `GET /api/investment/projection`
 - [x] Author `diagrams/api/api.mmd`
 - [x] Author `diagrams/classes/class-diagram.mmd`
-- [ ] Deploy the backend (currently local-only)
+- [x] Deploy the backend — migrated from a standalone Fastify server to Vercel Functions in the same project as the Frontend (see [Sprint 2 addendum](sprint-2-backend-outcomes.md#addendum-migrated-to-vercel-functions-same-project-as-the-frontend))
 
 Full writeup: [Sprint 2 — Backend Outcomes](sprint-2-backend-outcomes.md)
 
 ### Sprint 3 — Frontend (in progress)
 - [x] Fetch data from the Backend API (VOO, S&P 500, Nasdaq)
+- [x] Deploy the backend so production Frontend can reach it (same Vercel project, same-origin)
+- [ ] Add R2 credentials as Vercel Environment Variables so the production deploy actually works (not yet done — see [Sprint 2 addendum](sprint-2-backend-outcomes.md#addendum-migrated-to-vercel-functions-same-project-as-the-frontend))
 - [ ] Replace remaining placeholders (Super, Savings Account) with real data
-- [ ] Deploy the backend so production Frontend can reach it
 
 ---
 
@@ -317,5 +321,7 @@ Detailed, per-sprint knowledge-base pages live in `docs/` and are linked from he
 - Dagster uses `pyproject.toml` to discover the `data_pipeline` module — don't rename the directory without updating that config.
 - `market.duckdb`, dbt's `target/`/`logs/`, and `*.parquet` are all gitignored — they're regenerated every run and should never be committed. R2 is the durable store, not the local DuckDB file.
 - Mermaid `.mmd` files under `docs/diagrams/` are the editable source of truth for architecture diagrams; `.svg` files beside them are generated by `scripts/generate-diagrams.sh` / CI and should never be hand-edited.
-- The Backend deliberately uses Node.js + Fastify + `hyparquet` instead of the originally planned FastAPI + DuckDB, to keep the investment-calculation stack in one language as the Frontend. See [Sprint 2 §2.6](sprint-2-backend-outcomes.md#26-stack-change-fastapi-duckdb--node-fastify-hyparquet).
-- `Backend/.env` reads from the repo root, not `Backend/`, since it's shared with the Dagster pipeline — `server.js` loads it with an explicit absolute path rather than relying on `dotenv`'s CWD-relative default.
+- The Backend deliberately uses Node.js + `hyparquet` instead of the originally planned FastAPI + DuckDB, to keep the investment-calculation stack in one language as the Frontend. See [Sprint 2 §2.6](sprint-2-backend-outcomes.md#26-stack-change-fastapi-duckdb--node-fastify-hyparquet).
+- The Backend API is **not** a standalone server — it lives at `Frontend/api/` as Vercel Functions in the same project as the static site, so it deploys and scales with the Frontend automatically and needs no CORS config. See the [Sprint 2 addendum](sprint-2-backend-outcomes.md#addendum-migrated-to-vercel-functions-same-project-as-the-frontend).
+- `Frontend/vercel.json`'s `functions.includeFiles` bundles the repo-root `datasets.config.json` into the Vercel Functions — without it, the function's bundler wouldn't trace a plain `fs.readFileSync()` call to a file outside the default project directory, and the config would be missing in production.
+- Local Vercel Function testing needs `Frontend/.env.local` (Vercel's local-dev convention), separate from the repo-root `.env` the Dagster pipeline uses — copy the R2 credentials over when setting up a fresh clone. Production needs those same credentials added as Vercel **Environment Variables** (dashboard or `vercel env add ... production`) — they are not read from any `.env` file once deployed.
