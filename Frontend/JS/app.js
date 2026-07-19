@@ -2,12 +2,12 @@
 // Notice the calculator never checks WHICH investment is selected —
 // it just calls .project() and lets polymorphism do the work.
 
-import { IndexFund, Super, SavingsAccount } from "./Investment.js";
+import { Voo, Sp500, Nasdaq, Super, SavingsAccount } from "./Investment.js";
 import { GrowthChart } from "./Chart.js";
 
 class CalculatorApp {
   constructor() {
-    this.investments = [new IndexFund(), new Super(), new SavingsAccount()];
+    this.investments = [new Voo(), new Sp500(), new Nasdaq(), new Super(), new SavingsAccount()];
     this.selected = this.investments[0];
     this.liquidityInput = document.getElementById("liquidity-input");
     this.yearsInput = document.getElementById("years-input");
@@ -46,14 +46,22 @@ class CalculatorApp {
     this.update();
   }
 
-  // Recalculate and redraw everything from current inputs.
-  update() {
+  // Recalculate and redraw everything from current inputs. Async because
+  // market funds fetch their projection from the backend API — Super and
+  // SavingsAccount resolve immediately via the base class's sync wrapper.
+  async update() {
     const principal = Number(this.liquidityInput.value) || 0;
     const years = Number(this.yearsInput.value);
     this.yearsOutput.textContent = `${years} year${years > 1 ? "s" : ""}`;
-    const balances = this.selected.project(principal, years);
+
+    const requestedInvestment = this.selected;
+    const balances = await requestedInvestment.projectSeries(principal, years);
+    // If the user switched investments while this request was in flight,
+    // drop the stale result instead of overwriting a newer one.
+    if (this.selected !== requestedInvestment) return;
+
     this.renderSummary(principal, balances);
-    this.chart.draw(balances);
+    this.chart.draw(balances, requestedInvestment.chartUnit());
   }
 
   renderSummary(principal, balances) {

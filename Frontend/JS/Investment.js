@@ -2,6 +2,9 @@
 // Subclasses override rateForYear() — that is the polymorphism:
 // the calculator only ever talks to "an Investment", never a specific type.
 
+// Where the backend API lives. Only MarketFund subclasses call this.
+const API_BASE = "http://localhost:8080";
+
 export class Investment {
   constructor(name, description) {
     this.name = name;
@@ -34,17 +37,73 @@ export class Investment {
   rateLabel() {
     return `${(this.rateForYear(0) * 100).toFixed(1)}% p.a.`;
   }
-}
 
-// US index funds (VTI / S&P 500 / Nasdaq) — static 10% average return.
-export class IndexFund extends Investment {
-  constructor() {
-    super("VTI / S&P 500 / Nasdaq", "US index funds, historical average");
-    this.staticRate = 0.10; // TODO: replace with live data from the DAG
+  // The time unit of one projectSeries() step, for chart axis labeling.
+  // Yearly synthetic projections vs. MarketFund's monthly real data below.
+  chartUnit() {
+    return "yrs";
   }
 
+  // Async wrapper so the app can treat every investment the same way,
+  // whether its projection comes from local math (this default) or a
+  // network call (MarketFund overrides this below).
+  async projectSeries(principal, years) {
+    return this.project(principal, years);
+  }
+}
+
+// Base for investments whose projection comes from the backend API, which
+// reads real historical closes out of Cloudflare R2. Subclasses just set a
+// fundKey used by the API's fund->ticker mapping (datasets.config.json).
+export class MarketFund extends Investment {
+  constructor(name, description, fundKey) {
+    super(name, description);
+    this.fundKey = fundKey;
+  }
+
+  // MarketFund gets its rate from the API, not a static number — until the
+  // first projectSeries() call resolves, show a neutral placeholder label.
   rateForYear(year) {
-    return this.staticRate;
+    return 0;
+  }
+
+  rateLabel() {
+    return "live market data";
+  }
+
+  chartUnit() {
+    return "mo";
+  }
+
+  async projectSeries(principal, years) {
+    const url = `${API_BASE}/api/investment/projection?fund=${this.fundKey}&liquidity=${principal}&years=${years}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Projection request failed for ${this.name} (${response.status})`);
+    }
+    const data = await response.json();
+    return data.balances;
+  }
+}
+
+// Vanguard S&P 500 ETF — real historical returns via the backend API.
+export class Voo extends MarketFund {
+  constructor() {
+    super("VOO", "Vanguard S&P 500 ETF, real historical returns", "voo");
+  }
+}
+
+// iShares Core S&P 500 ETF — real historical returns via the backend API.
+export class Sp500 extends MarketFund {
+  constructor() {
+    super("S&P 500", "iShares Core S&P 500 ETF, real historical returns", "sp500");
+  }
+}
+
+// Nasdaq Composite Index — real historical returns via the backend API.
+export class Nasdaq extends MarketFund {
+  constructor() {
+    super("Nasdaq", "Nasdaq Composite Index, real historical returns", "nasdaq");
   }
 }
 

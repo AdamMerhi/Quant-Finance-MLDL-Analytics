@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A personal quant finance analytics platform. The end goal is an automated pipeline that fetches financial data, transforms it into Parquet files, stores it in Cloudflare R2, serves it via a FastAPI backend, and displays it on a Vercel-hosted frontend.
+A personal quant finance analytics platform. The end goal is an automated pipeline that fetches financial data, transforms it into Parquet files, stores it in Cloudflare R2, serves it via a backend API, and displays it on a Vercel-hosted frontend.
 
 ---
 
@@ -12,7 +12,7 @@ A personal quant finance analytics platform. The end goal is an automated pipeli
 
 [View Mermaid source](diagrams/system/system.mmd)
 
-Solid nodes/edges are live today; dashed nodes (FastAPI backend, Vercel data flow) are planned but not yet built — see the [Roadmap](#roadmap).
+The Backend API (Node + Fastify) and the R2 → API → Frontend data flow are now live for three funds (VOO, S&P 500, Nasdaq) — see [Sprint 2 Outcomes](sprint-2-backend-outcomes.md). Note this deviates from the originally planned FastAPI + DuckDB stack (see [§2.6 of Sprint 2](sprint-2-backend-outcomes.md#26-stack-change-fastapi-duckdb--node-fastify-hyparquet)).
 
 ---
 
@@ -24,7 +24,7 @@ Solid nodes/edges are live today; dashed nodes (FastAPI backend, Vercel data flo
 
 - **Compute:** GitHub Actions runner executes the Dagster job (`market_data_job`); DuckDB is used only as an in-run compute engine and does not persist across runs.
 - **Storage:** Cloudflare R2 is the durable system of record — the pipeline writes Parquet there on every run.
-- **Hosting:** Vercel hosts the static Frontend (project `quant-fintech-frontend`). A backend host is planned once FastAPI exists.
+- **Hosting:** Vercel hosts the static Frontend (project `quant-fintech-frontend`). The Backend API (`Backend/`, Node + Fastify) runs locally only — a deployed backend host is still planned.
 - **Local dev:** `.venv` + `dagster dev` for manual runs against the same DuckDB/dbt project.
 
 ---
@@ -41,15 +41,35 @@ Two tables exist inside the DuckDB file used during a pipeline run:
 
 ---
 
-## Class Architecture (planned)
+## Class Architecture
 
-Not yet authored. The Frontend currently has a real OOP model (`Investment` base class → `IndexFund` / `Super` / `SavingsAccount`, plus `CalculatorApp` and `GrowthChart`) driving the placeholder calculator, but this is still evolving — the class diagram will be added under `diagrams/classes/` once that logic settles as part of building out the investment-logic classes properly.
+![Class Architecture](diagrams/classes/class-diagram.svg)
+
+[View Mermaid source](diagrams/classes/class-diagram.mmd)
+
+Two parallel `Investment` hierarchies, one per language, kept intentionally similar in shape:
+- **Frontend** (`Frontend/JS/Investment.js`): base `Investment` → `MarketFund` (fetches projections from the backend) → `Voo` / `Sp500` / `Nasdaq`; and → `Super` / `SavingsAccount` (local synthetic math, unchanged). `CalculatorApp` only ever calls `projectSeries()` polymorphically.
+- **Backend** (`Backend/src/investment-calculations/`): base `Investment` → `MarketInvestment` (computes monthly returns from injected month-end closes) → `Voo` / `Sp500` / `Nasdaq`. `InvestmentController` only ever calls `project()` polymorphically via `funds.createFund()`.
+
+Full detail: [Sprint 2 Outcomes](sprint-2-backend-outcomes.md#24-investment-class-hierarchy--mirrors-the-frontends-oop-style).
 
 ---
 
-## API Architecture (planned)
+## API Architecture
 
-Not yet authored. `Backend/` is currently empty — no FastAPI app exists, and the Frontend makes no API calls yet. The diagram will be added under `diagrams/api/` once the FastAPI backend (reading Parquet from R2 via DuckDB) is built out.
+![API Architecture](diagrams/api/api.svg)
+
+[View Mermaid source](diagrams/api/api.mmd)
+
+The first backend endpoint, served by `Backend/` (Node + Fastify — see the [stack-change note](sprint-2-backend-outcomes.md#26-stack-change-fastapi-duckdb--node-fastify-hyparquet) for why this isn't FastAPI/DuckDB as originally planned):
+
+```
+GET /health
+GET /api/investment/projection?fund={voo|sp500|nasdaq}&liquidity={number}&years={1-40}
+  -> { fund, ticker, liquidity, months, labels, balances, finalValue, gain, totalReturnPct }
+```
+
+Request path: Frontend `MarketFund.projectSeries()` → Fastify route → `InvestmentController` (validates input) → `MarketDataRepository` (cached `hyparquet` read of the R2 Parquet) + `funds.createFund()` (polymorphic `Investment.project()`) → JSON response. Full detail: [Sprint 2 Outcomes](sprint-2-backend-outcomes.md#3-current-api-surface).
 
 ---
 
@@ -82,7 +102,7 @@ raw_market_prices  →  stg_market_prices  →  market_prices_parquet
 | Integration | Purpose | Status |
 |---|---|---|
 | Yahoo Finance (`yfinance`) | Source of daily OHLCV bars for `IVV`, `VOO`, `^IXIC` | Live |
-| Cloudflare R2 | Durable Parquet storage, read by the (future) backend | Live |
+| Cloudflare R2 | Durable Parquet storage, read by the Backend API | Live |
 | Vercel | Hosts the static Frontend | Live (placeholder content) |
 
 ---
@@ -127,6 +147,17 @@ bash scripts/generate-diagrams.sh
 
 Renders every `.mmd` file under `docs/diagrams/` to an `.svg` beside it. Requires Node.js (pulls `@mermaid-js/mermaid-cli` via `npx` on first run).
 
+### Run the Backend API locally
+
+```powershell
+cd Backend
+npm install
+npm start
+# or: npm run dev   (auto-restarts on file changes)
+```
+
+Reads `.env` from the repo root (same R2 credentials as the pipeline) and listens on `http://localhost:8080`. Requires the pipeline to have run at least once so `stg_market_prices.parquet` exists in R2. See [Sprint 2 Outcomes](sprint-2-backend-outcomes.md) for the full API surface.
+
 ---
 
 ## Deployment
@@ -145,6 +176,10 @@ vercel
 ### Diagrams → GitHub Actions
 
 `.github/workflows/diagrams.yml` runs on every push to `main` that touches `docs/diagrams/**/*.mmd`, renders all Mermaid sources to SVG via `scripts/generate-diagrams.sh`, and commits the resulting `.svg` files back with `[skip ci]` (so the commit can't retrigger itself).
+
+### Backend API → not yet deployed
+
+`Backend/` runs locally only (`npm start`, port 8080). There is no hosting/CI for it yet — see the dashed "Deployed backend host (planned)" node in the [Infrastructure diagram](#infrastructure) and the [Sprint 2 follow-ups](sprint-2-backend-outcomes.md#follow-ups--known-gaps).
 
 ---
 
@@ -182,27 +217,35 @@ Loaded automatically by `data_pipeline/definitions.py` via `python-dotenv`'s `lo
 │       └── models/us-exchange/staging/
 │           ├── _sources.yml          # declares source market.yahoo_raw
 │           └── stg_market_prices.sql
-├── Backend/                          # Empty — FastAPI + DuckDB planned
-├── Frontend/                         # Static site deployed to Vercel
-│   ├── index.html                    # Placeholder calculator UI
-│   ├── JS/                           # Investment.js, Chart.js, app.js
-│   └── .vercel/                      # Vercel project config (links to quant-fintech-frontend)
-├── docs/                             # Documentation hub
-│   ├── WIKI.md                       # This file
+├── Backend/                           # Node + Fastify API (Sprint 2)
+│   ├── server.js                      # Boots Fastify, CORS, warms cache, listens :8080
+│   └── src/
+│       ├── config/datasets.js         # Reads datasets.config.json
+│       ├── data-access/               # R2Client.js, MarketDataRepository.js (hyparquet)
+│       ├── investment-calculations/   # Investment.js, MarketInvestment.js, funds.js
+│       ├── api-management/            # routes.js, InvestmentController.js
+│       └── ml-dl/                     # Empty placeholder — future ML/DL work
+├── Frontend/                          # Static site deployed to Vercel
+│   ├── index.html                     # Calculator UI
+│   ├── JS/                            # Investment.js, Chart.js, app.js
+│   └── .vercel/                       # Vercel project config (links to quant-fintech-frontend)
+├── docs/                              # Documentation hub
+│   ├── WIKI.md                        # This file
 │   ├── sprint-1-data-engineering-outcomes.md
-│   ├── diagrams/                     # Mermaid .mmd sources + rendered .svg
-│   │   ├── system/  infrastructure/  database/  workflows/
-│   │   └── classes/  api/            # scaffolded, awaiting future architecture
-│   └── images/                       # Screenshots and supporting images
+│   ├── sprint-2-backend-outcomes.md
+│   ├── diagrams/                      # Mermaid .mmd sources + rendered .svg
+│   │   └── system/  infrastructure/  database/  workflows/  classes/  api/
+│   └── images/                        # Screenshots and supporting images
 ├── scripts/
-│   └── generate-diagrams.sh          # Renders all docs/diagrams/**/*.mmd -> .svg
+│   └── generate-diagrams.sh           # Renders all docs/diagrams/**/*.mmd -> .svg
 ├── .github/workflows/
-│   ├── daily-pipeline.yml            # Scheduled (06:00 UTC) + manual market_data_job runs
-│   └── diagrams.yml                  # Auto-renders + commits diagram SVGs on push to main
-├── pyproject.toml                    # Registers data_pipeline as the Dagster module
-├── .venv/                            # Local Python venv (gitignored)
-├── .env                              # Secrets — gitignored (see Environment Variables above)
-└── CLAUDE.md                         # Guidance for Claude Code working in this repo
+│   ├── daily-pipeline.yml             # Scheduled (06:00 UTC) + manual market_data_job runs
+│   └── diagrams.yml                   # Auto-renders + commits diagram SVGs on push to main
+├── pyproject.toml                     # Registers data_pipeline as the Dagster module
+├── datasets.config.json               # Registry: parquet dataset -> R2 key, columns, fund->ticker map
+├── .venv/                             # Local Python venv (gitignored)
+├── .env                               # Secrets — gitignored (see Environment Variables above)
+└── CLAUDE.md                          # Guidance for Claude Code working in this repo
 ```
 
 ---
@@ -214,8 +257,8 @@ Loaded automatically by `data_pipeline/definitions.py` via `python-dotenv`'s `lo
 | Orchestration | Dagster (+ dagster-dbt) | 3-asset DAG live: extract → dbt → load-to-R2 |
 | Transform | dbt (duckdb adapter) | 1 staging model (`stg_market_prices`) |
 | Storage | Cloudflare R2 | Live — pipeline writes Parquet to it each run |
-| Backend API | FastAPI + DuckDB | Not started |
-| Frontend | Static HTML → Vercel | Deployed (placeholder) |
+| Backend API | Node.js + Fastify + hyparquet | 1 endpoint live locally: `GET /api/investment/projection` (VOO/S&P 500/Nasdaq) |
+| Frontend | Static HTML → Vercel | Deployed; VOO/S&P 500/Nasdaq fetch live data, Super/Savings still placeholders |
 | CI/CD trigger | GitHub Actions | Diagram-render workflow live; daily pipeline schedule committed, awaiting repo secrets |
 | Data format | Apache Parquet | Live — written and verified in R2 |
 | Docs | Mermaid diagrams + WIKI | This system |
@@ -241,16 +284,20 @@ Loaded automatically by `data_pipeline/definitions.py` via `python-dotenv`'s `lo
 
 Full writeup: [Sprint 1 — Data Engineering Outcomes](sprint-1-data-engineering-outcomes.md)
 
-### Sprint 2 — Backend (planned)
-- [ ] FastAPI app in `Backend/`
-- [ ] DuckDB reads Parquet from R2
-- [ ] JSON API endpoints
-- [ ] Author `diagrams/api/api.mmd` once endpoints exist
+### Sprint 2 — Backend ✅
+- [x] Node + Fastify app in `Backend/` (deviated from originally planned FastAPI + DuckDB — see [Sprint 2 §2.6](sprint-2-backend-outcomes.md#26-stack-change-fastapi-duckdb--node-fastify-hyparquet))
+- [x] Backend reads Parquet from R2 (`hyparquet`, no DuckDB/SQL)
+- [x] JSON API endpoint: `GET /api/investment/projection`
+- [x] Author `diagrams/api/api.mmd`
+- [x] Author `diagrams/classes/class-diagram.mmd`
+- [ ] Deploy the backend (currently local-only)
 
-### Sprint 3 — Frontend (planned)
-- [ ] Replace placeholder with real charts/tables
-- [ ] Fetch data from FastAPI
-- [ ] Author `diagrams/classes/class-diagram.mmd` once the investment-logic classes settle
+Full writeup: [Sprint 2 — Backend Outcomes](sprint-2-backend-outcomes.md)
+
+### Sprint 3 — Frontend (in progress)
+- [x] Fetch data from the Backend API (VOO, S&P 500, Nasdaq)
+- [ ] Replace remaining placeholders (Super, Savings Account) with real data
+- [ ] Deploy the backend so production Frontend can reach it
 
 ---
 
@@ -259,6 +306,7 @@ Full writeup: [Sprint 1 — Data Engineering Outcomes](sprint-1-data-engineering
 Detailed, per-sprint knowledge-base pages live in `docs/` and are linked from here as each sprint wraps up:
 
 - [Sprint 1 — Data Engineering Outcomes](sprint-1-data-engineering-outcomes.md) — DAG lineage, full file tree, the reasoning behind every logic/structure change, bugs found during verification, and how everything was tested end-to-end.
+- [Sprint 2 — Backend Outcomes](sprint-2-backend-outcomes.md) — the first backend API (Node + Fastify), the Investment class hierarchy mirrored across Frontend/Backend, the month-end-close compounding logic, the FastAPI→Fastify stack change and why, bugs found during verification, and how everything was tested end-to-end.
 
 ---
 
@@ -269,3 +317,5 @@ Detailed, per-sprint knowledge-base pages live in `docs/` and are linked from he
 - Dagster uses `pyproject.toml` to discover the `data_pipeline` module — don't rename the directory without updating that config.
 - `market.duckdb`, dbt's `target/`/`logs/`, and `*.parquet` are all gitignored — they're regenerated every run and should never be committed. R2 is the durable store, not the local DuckDB file.
 - Mermaid `.mmd` files under `docs/diagrams/` are the editable source of truth for architecture diagrams; `.svg` files beside them are generated by `scripts/generate-diagrams.sh` / CI and should never be hand-edited.
+- The Backend deliberately uses Node.js + Fastify + `hyparquet` instead of the originally planned FastAPI + DuckDB, to keep the investment-calculation stack in one language as the Frontend. See [Sprint 2 §2.6](sprint-2-backend-outcomes.md#26-stack-change-fastapi-duckdb--node-fastify-hyparquet).
+- `Backend/.env` reads from the repo root, not `Backend/`, since it's shared with the Dagster pipeline — `server.js` loads it with an explicit absolute path rather than relying on `dotenv`'s CWD-relative default.

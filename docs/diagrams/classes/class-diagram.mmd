@@ -1,0 +1,66 @@
+%% Class Architecture — investment-projection OOP model
+%% Two parallel hierarchies (Frontend = local/synthetic + fetch wrapper,
+%% Backend = the real compounding math). FE_/BE_ prefixes just disambiguate
+%% same-named classes on the diagram; they are not part of the real names.
+classDiagram
+    class FE_Investment {
+        +name
+        +description
+        +rateForYear(year)
+        +project(principal, years)
+        +applyInterest(balance, rate)
+        +rateLabel()
+        +chartUnit()
+        +projectSeries(principal, years)
+    }
+    class FE_MarketFund {
+        +fundKey
+        +projectSeries(principal, years) fetch API
+        +chartUnit() "mo"
+    }
+    class FE_Voo
+    class FE_Sp500
+    class FE_Nasdaq
+    class FE_Super
+    class FE_SavingsAccount
+    class FE_CalculatorApp {
+        +investments
+        +selected
+        +update()
+    }
+    class FE_GrowthChart {
+        +draw(balances, unit)
+    }
+
+    FE_Investment <|-- FE_MarketFund
+    FE_Investment <|-- FE_Super
+    FE_Investment <|-- FE_SavingsAccount
+    FE_MarketFund <|-- FE_Voo
+    FE_MarketFund <|-- FE_Sp500
+    FE_MarketFund <|-- FE_Nasdaq
+    FE_CalculatorApp --> FE_Investment : projectSeries()
+    FE_CalculatorApp --> FE_GrowthChart : draw()
+
+    class BE_Investment {
+        +name
+        +description
+        +monthlyReturns()
+        +applyReturn(balance, rate)
+        +project(principal)
+    }
+    class BE_MarketInvestment {
+        +monthEndCloses
+        +monthlyReturns()
+    }
+    class BE_Voo
+    class BE_Sp500
+    class BE_Nasdaq
+    class BE_InvestmentController {
+        +getProjection(query)
+    }
+
+    BE_Investment <|-- BE_MarketInvestment
+    BE_MarketInvestment <|-- BE_Voo
+    BE_MarketInvestment <|-- BE_Sp500
+    BE_MarketInvestment <|-- BE_Nasdaq
+    BE_InvestmentController --> BE_Investment : project()

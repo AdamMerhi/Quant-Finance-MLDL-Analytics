@@ -1,3 +1,5 @@
+from datetime import date
+
 import dagster as dg
 import duckdb
 import yfinance as yf
@@ -18,9 +20,12 @@ def raw_market_prices() -> dg.MaterializeResult:
     dbt_project/models/us-exchange/staging/_sources.yml).
     """
 
+    today = date.today()
+    start = today.replace(year=today.year - 20)
+
     raw = yf.download(
         tickers=TICKERS,
-        start="2020-01-01",
+        start=start.isoformat(),
         group_by="ticker",
         auto_adjust=False,
     )

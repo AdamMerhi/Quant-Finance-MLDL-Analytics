@@ -8,11 +8,13 @@ export class GrowthChart {
     this.padding = 48;
   }
 
-  // Public entry point: draw a line of yearly balances.
-  draw(balances) {
+  // Public entry point: draw a line of balances. `unit` labels the x-axis
+  // ("yrs" for the synthetic yearly projections, "mo" for real monthly
+  // market data) — defaults to "yrs" to match the original callers.
+  draw(balances, unit = "yrs") {
     this.clear();
     const max = Math.max(...balances);
-    this.drawAxes(balances.length - 1, max);
+    this.drawAxes(balances.length - 1, max, unit);
     this.drawLine(balances, max);
   }
 
@@ -29,7 +31,7 @@ export class GrowthChart {
     return { x, y };
   }
 
-  drawAxes(years, max) {
+  drawAxes(count, max, unit = "yrs") {
     const { ctx, padding, canvas } = this;
     ctx.strokeStyle = "rgba(255,255,255,0.25)";
     ctx.fillStyle = "rgba(255,255,255,0.6)";
@@ -42,7 +44,7 @@ export class GrowthChart {
     ctx.fillText(`$${Math.round(max).toLocaleString()}`, 4, padding + 4);
     ctx.fillText("$0", 4, canvas.height - padding);
     ctx.fillText("0", padding, canvas.height - padding + 16);
-    ctx.fillText(`${years} yrs`, canvas.width - padding - 24, canvas.height - padding + 16);
+    ctx.fillText(`${count} ${unit}`, canvas.width - padding - 24, canvas.height - padding + 16);
   }
 
   drawLine(balances, max) {

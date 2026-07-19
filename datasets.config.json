@@ -1,0 +1,13 @@
+{
+  "datasets": {
+    "us_exchange_market_prices": {
+      "r2Key": "us_exchange/stg_market_prices.parquet",
+      "columns": ["date", "ticker", "close", "volume"],
+      "funds": {
+        "voo": "VOO",
+        "sp500": "IVV",
+        "nasdaq": "^IXIC"
+      }
+    }
+  }
+}

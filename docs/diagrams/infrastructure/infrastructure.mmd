@@ -16,9 +16,13 @@ flowchart TB
         r2[("Cloudflare R2 bucket\nS3-compatible")]
     end
 
+    subgraph backend_compute["Backend compute (Node + Fastify)"]
+        api["Backend/server.js\n(local only, port 8080)"]
+        backend_host["Deployed backend host\n(planned)"]
+    end
+
     subgraph hosting["Hosting"]
         vercel["Vercel\nstatic site: quant-fintech-frontend"]
-        backend_host["Backend host\n(planned)"]
     end
 
     subgraph local["Local dev"]
@@ -27,7 +31,8 @@ flowchart TB
 
     yahoo --> dagster
     duckdb -- "Parquet upload (boto3)" --> r2
-    r2 -.-> backend_host
+    r2 -- "GetObject (@aws-sdk/client-s3)" --> api
+    api -.-> backend_host
     backend_host -.-> vercel
     venv -. "manual runs" .-> duckdb
 
